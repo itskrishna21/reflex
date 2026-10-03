@@ -18,7 +18,7 @@ In the repo you want Reflex in:
 npx agent-procedures init
 ```
 
-That creates the store, wires Claude Code hooks, and leaves a runner under `.claude/hooks/`. `npm install` alone does nothing — you need `init`.
+That creates the store, copies the engine into `.reflex/engine/`, and drops a tiny hook shim under `.claude/hooks/` that points at it. `npm install` alone does nothing — you need `init`.
 
 After that you just use Claude. Capture, recall, write. No extra commands for daily use.
 
@@ -29,10 +29,17 @@ After that you just use Claude. Capture, recall, write. No extra commands for da
   config.json        # knobs, not memory
   procedures.jsonl   # remembered procedures (commit this)
   runs.jsonl         # optional run outcomes
+  engine/            # the runtime, harness-neutral (commit this too)
   traces/            # scratch for the current turn (gitignored)
 ```
 
-Init adds `.reflex/traces/` to `.gitignore`. Commit the rest of `.reflex/` and the `.claude/` hook wiring so a clone comes up ready.
+Init adds `.reflex/traces/` to `.gitignore`. Commit the rest of `.reflex/` and the `.claude/` hook wiring so a clone comes up ready. Re-run `init` to refresh the engine after upgrading.
+
+## Adding a harness
+
+Only three things are harness-specific: where hooks register, what the stdin payload looks like, and how to hand context back. Everything else (trace, judge, store, recall, groomer) doesn't care.
+
+One file in `lib/harnesses/` with `id`, `hookFile`, `register`, `normalize`, `render`, plus a line in `harnesses/index.js`. `lib/harnesses/claude.js` is the reference. Then `npx agent-procedures init --harness <id>`.
 
 ## API key (for the groomer)
 
