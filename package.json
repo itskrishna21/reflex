@@ -13,6 +13,9 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "keywords": [
     "agents",
     "coding-agents",
@@ -29,5 +32,8 @@
   "bugs": {
     "url": "https://github.com/itskrishna21/reflex/issues"
   },
-  "homepage": "https://github.com/itskrishna21/reflex#readme"
+  "homepage": "https://github.com/itskrishna21/reflex#readme",
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
 }
