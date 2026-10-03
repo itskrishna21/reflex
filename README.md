@@ -2,65 +2,71 @@
 
 Procedural memory for coding agents.
 
-Agents are good at figuring things out and bad at remembering how they did it last time. Reflex watches the tools Claude Code actually runs, keeps the paths that worked, and hands them back the next time a similar prompt shows up. Facts stay in your docs. This stores **how**.
+Coding agents are pretty good at figuring things out. They're bad at remembering how they did it last time, so they just figure it out again. Every time.
 
-Package name is `agent-procedures`. Product name is Reflex.
+Reflex watches the tools your agent actually runs, keeps the paths that worked, and hands them back the next time you ask for something similar. It doesn't store facts, your docs already do that. It stores how.
 
-## Status
+The npm package is `agent-procedures`. The product is Reflex.
 
-Early. Claude Code only for now. Other harnesses (Cursor, etc.) are the same brain with different wiring — not built yet.
+## How it works (hot path vs cold path)
+
+The **hot path** runs every time you prompt the agent or the agent runs a tool. It has to be fast, so it doesn't call an LLM. It's just disk I/O. When you ask for something, Reflex checks its memory for a match and injects the steps into the agent's context. When the agent uses tools, Reflex traces what happens. If the agent gets the job done without leaving broken steps behind, Reflex saves that trace as a new procedure.
+
+The **cold path** is a background groomer. Once 5 new procedures pile up, it kicks off a background process that asks a cheap LLM to review them. It drops the risky ones and adds aliases (like synonyms) to the good ones so they match more easily next time. 
+
+You don't run either of these manually. You just use your agent.
+
+## Status & Harnesses
+
+Early. Reflex is built to plug into different agent platforms (harnesses). Right now, **Claude Code is the only one built** and is the default.
+
+I set the engine up so Cursor and others can plug in later, but the adapters for those don't exist yet.
 
 ## Install
 
-In the repo you want Reflex in:
+Run this in the repo you want Reflex in:
 
 ```bash
 npx agent-procedures init
 ```
 
-That creates the store, copies the engine into `.reflex/engine/`, and drops a tiny hook shim under `.claude/hooks/` that points at it. `npm install` alone does nothing — you need `init`.
+By default this installs the Claude Code harness. If you were using a different one later, you'd run `npx agent-procedures init --harness cursor`. 
 
-After that you just use Claude. Capture, recall, write. No extra commands for daily use.
+Installing the package on its own won't do anything. You need `init`. It creates the folders, copies the runtime in, and adds a hook so your agent knows to call it.
 
-## What's on disk
+## API key (for the background groomer)
+
+Because the groomer uses an LLM to review procedures, it needs a cheap model key. 
+
+If you already have `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` exported in your terminal, it just uses that. Otherwise:
+
+```bash
+npx agent-procedures auth login    # pick a provider, paste your key
+npx agent-procedures auth status   # check what it's using and the last groomer error
+```
+
+The key gets checked before it's saved, so a typo fails right away instead of a week later in a log file. It gets stored in `~/.reflex/credentials.json` on your machine and only you can read it. 
+
+## What ends up in your repo
 
 ```
 .reflex/
-  config.json        # knobs, not memory
-  procedures.jsonl   # remembered procedures (commit this)
+  config.json        # settings, not memory
+  procedures.jsonl   # what it remembered
   runs.jsonl         # optional run outcomes
-  engine/            # the runtime, harness-neutral (commit this too)
-  traces/            # scratch for the current turn (gitignored)
+  engine/            # the runtime
+  traces/            # scratch for the current turn
 ```
 
-Init adds `.reflex/traces/` to `.gitignore`. Commit the rest of `.reflex/` and the `.claude/` hook wiring so a clone comes up ready. Re-run `init` to refresh the engine after upgrading.
+`traces/` gets added to `.gitignore`. **Commit everything else**, including `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again to refresh the engine.
 
 ## Adding a harness
 
-Only three things are harness-specific: where hooks register, what the stdin payload looks like, and how to hand context back. Everything else (trace, judge, store, recall, groomer) doesn't care.
+If you want to build an adapter for something other than Claude Code:
 
-One file in `lib/harnesses/` with `id`, `hookFile`, `register`, `normalize`, `render`, plus a line in `harnesses/index.js`. `lib/harnesses/claude.js` is the reference. Then `npx agent-procedures init --harness <id>`.
+Only three things change between harnesses: where hooks get registered, what the event payload looks like, and how context gets passed back to the agent. The rest of the engine doesn't care who called it.
 
-## API key (for the groomer)
-
-Hot path is disk only. No LLM on every prompt.
-
-A background groomer reviews new procedures later — drop bad ones, add aliases so recall matches paraphrases. It needs a cheap model key. Env vars win if set (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`). Otherwise:
-
-```bash
-npx agent-procedures auth login    # pick provider, paste key (checked before save)
-npx agent-procedures auth status   # what's active, last groomer error
-```
-
-Keys land in `~/.reflex/credentials.json`, mode 600. That file is personal. Procedures stay in the repo.
-
-## Commands
-
-```bash
-npx agent-procedures init
-npx agent-procedures auth login
-npx agent-procedures auth status
-```
+Adding one is a single file in `lib/harnesses/` plus one line in `lib/harnesses/index.js`. `claude.js` is the reference.
 
 ## License
 
