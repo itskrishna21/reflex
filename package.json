@@ -4,7 +4,7 @@
   "description": "Procedural memory for coding agents",
   "type": "module",
   "bin": {
-    "agent-procedures": "./bin/cli.js"
+    "agent-procedures": "bin/cli.js"
   },
   "files": [
     "bin",
