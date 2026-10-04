@@ -67,6 +67,7 @@ describe('recall', () => {
     expect(hit.text).toContain('echo alt');
     expect(hit.text).not.toContain('echo off');
     expect(hit.text).not.toContain('echo weak');
+    expect(hit.notice).toBe('Reflex recalled: "fix auth token bug"');
   });
 
   it('matches via alias when the main trigger does not', () => {
