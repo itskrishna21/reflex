@@ -1,6 +1,6 @@
 {
   "name": "agent-procedures",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Procedural memory for coding agents",
   "type": "module",
   "bin": {
