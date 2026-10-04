@@ -39,6 +39,32 @@ describe('init', () => {
     expect(s.hooks.UserPromptSubmit).toHaveLength(1);
   });
 
+  it('gitignores every runtime artifact except the committed allowlist', () => {
+    // A pre-existing whole-dir ignore would silently defeat the allowlist.
+    fs.writeFileSync(path.join(DIR, '.gitignore'), 'node_modules/\n.reflex/\n.reflex/traces/\n');
+    execSync('git init -q', { cwd: DIR });
+
+    init(DIR);
+    init(DIR);
+
+    const gitignore = fs.readFileSync(path.join(DIR, '.gitignore'), 'utf8');
+    expect(gitignore).toContain('node_modules/');
+    expect(gitignore.match(/\.reflex\/\*/g)).toHaveLength(1);
+
+    fs.mkdirSync(path.join(DIR, '.reflex', 'traces'), { recursive: true });
+    fs.writeFileSync(path.join(DIR, '.reflex', 'traces', 't.jsonl'), '');
+    fs.writeFileSync(path.join(DIR, '.reflex', 'worker.log'), '');
+    const ignored = (file) =>
+      execSync(`git check-ignore -q "${file}" && echo yes || echo no`, { cwd: DIR, shell: '/bin/sh' })
+        .toString().trim() === 'yes';
+
+    for (const file of ['config.json', 'procedures.jsonl', 'runs.jsonl', 'runtime.js']) {
+      expect(ignored(`.reflex/${file}`), file).toBe(false);
+    }
+    expect(ignored('.reflex/traces/t.jsonl')).toBe(true);
+    expect(ignored('.reflex/worker.log')).toBe(true);
+  });
+
   it('installs one runtime file and a thin shim, and drops a leftover engine dir', () => {
     const engine = path.join(DIR, '.reflex', 'engine', 'harnesses');
     fs.mkdirSync(engine, { recursive: true });

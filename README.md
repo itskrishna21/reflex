@@ -58,7 +58,15 @@ The key gets checked before it's saved, so a typo fails right away instead of a 
   traces/            # scratch for the current turn
 ```
 
-`traces/` gets added to `.gitignore`. **Commit everything else**, including `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
+Init ignores everything under `.reflex/` except `config.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those four files**, plus `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
+
+## Secrets
+
+Reflex sanitizes prompts and tool targets before writing traces. Inline credentials it can identify are promoted to environment requirements, so a stored procedure keeps `npm run migrate` and records that it needs `DATABASE_URL` instead of storing the URL value. Recall tells the agent which variables must already be set.
+
+Reflex also checks for common provider credentials using signatures ported from Gitleaks. If it detects a secret that it cannot safely parameterize, it drops that turn instead of writing a procedure or sending it to the groomer.
+
+Secret detection is defense in depth, not a guarantee. Do not put credentials directly in prompts or command lines; use environment variables or a secret manager.
 
 ## Adding a harness
 

@@ -38,6 +38,58 @@ describe('engine', () => {
     ]);
   });
 
+  it('sanitizes commands before they touch disk and records required env vars', () => {
+    const secret = 'postgres://admin:hunter2@db.prod:5432/app';
+    prompt('s', 'p', 'deploy the migration');
+    tool('s', 'p', 'Bash', `export DATABASE_URL=${secret} && npm run migrate`);
+
+    const traceText = fs.readFileSync(trace('s', 'p'), 'utf8');
+    expect(traceText).not.toContain('hunter2');
+    expect(traceText).not.toContain(secret);
+
+    stop('s', 'p');
+    const [node] = procs();
+    expect(node.steps).toEqual([{ t: 'Bash', target: 'npm run migrate' }]);
+    expect(node.requires_env).toEqual(['DATABASE_URL']);
+  });
+
+  it('does not store an empty step when a command was only a sensitive assignment', () => {
+    prompt('s', 'p', 'set the token');
+    tool('s', 'p', 'Bash', 'export TOKEN=abc123');
+    tool('s', 'p', 'Edit', 'src/a.js');
+
+    stop('s', 'p');
+    const [node] = procs();
+    expect(node.steps).toEqual([{ t: 'Edit', target: 'src/a.js' }]);
+    expect(node.requires_env).toEqual(['TOKEN']);
+  });
+
+  it('drops a turn with an unparameterizable secret and never writes it raw', () => {
+    const token = `ghp_${'a1'.repeat(18)}`;
+    prompt('s', 'p', 'configure the integration');
+    tool('s', 'p', 'Bash', `echo ${token} > token.txt`);
+
+    const traceText = fs.readFileSync(trace('s', 'p'), 'utf8');
+    expect(traceText).not.toContain(token);
+    expect(traceText).toContain('[secret:github-pat]');
+
+    stop('s', 'p');
+    expect(fs.existsSync(path.join(DIR, 'procedures.jsonl'))).toBe(false);
+  });
+
+  it('sanitizes secrets in prompts before tracing and drops the turn', () => {
+    const token = `ghp_${'b2'.repeat(18)}`;
+    prompt('s', 'p', `deploy with ${token}`);
+
+    const traceText = fs.readFileSync(trace('s', 'p'), 'utf8');
+    expect(traceText).not.toContain(token);
+    expect(traceText).toContain('[secret:github-pat]');
+
+    tool('s', 'p', 'Bash', 'npm run deploy');
+    stop('s', 'p');
+    expect(fs.existsSync(path.join(DIR, 'procedures.jsonl'))).toBe(false);
+  });
+
   it('stop writes a pending node from a clean mutating trace and clears the trace', () => {
     prompt('s', 'p', 'test task');
     tool('s', 'p', 'Bash', 'cat README.md');
@@ -87,6 +139,19 @@ describe('engine', () => {
 
     expect(prompt('s', 'p2', 'can you compile it').context).toContain('npm run build');
     expect(prompt('s', 'p3', 'unrelated').context).toBeNull();
+  });
+
+  it('recall names required environment variables', () => {
+    seed([{
+      id: 'abc',
+      trigger: 'run migration',
+      steps: [{ t: 'Bash', target: 'npm run migrate' }],
+      requires_env: ['DATABASE_URL'],
+      enabled: true,
+    }]);
+
+    const { context } = prompt('s', 'p', 'please run migration');
+    expect(context).toContain('Requires environment: DATABASE_URL');
   });
 
   it('recall skips disabled nodes and edges, includes alt/on_fail text', () => {
