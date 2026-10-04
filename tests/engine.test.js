@@ -33,7 +33,7 @@ describe('engine', () => {
   });
 
   it('prompt opens a trace with the goal and returns no context on miss', () => {
-    expect(prompt('s', 'p', 'do the thing')).toEqual({ context: null });
+    expect(prompt('s', 'p', 'do the thing')).toEqual({ context: null, notice: null });
     expect(JSON.parse(fs.readFileSync(trace('s', 'p'), 'utf8').trim())).toEqual({ t: 'Goal', prompt: 'do the thing' });
   });
 
@@ -156,10 +156,11 @@ describe('engine', () => {
 
     const r1 = prompt('s', 'p1', 'hey please run build for me');
     expect(r1.context).toContain('npm run build');
+    expect(r1.notice).toBe('Reflex recalled: "run build"');
     expect(JSON.parse(fs.readFileSync(trace('s', 'p1'), 'utf8').trim().split('\n')[1])).toEqual({ t: 'Recall', hit: 'abc' });
 
     expect(prompt('s', 'p2', 'can you compile it').context).toContain('npm run build');
-    expect(prompt('s', 'p3', 'unrelated').context).toBeNull();
+    expect(prompt('s', 'p3', 'unrelated')).toEqual({ context: null, notice: null });
 
     seedPending([{ id: 'pend', trigger: 'ship release', steps: [{ t: 'Bash', target: 'npm run release' }], enabled: true, status: 'pending_review' }]);
     expect(prompt('s', 'p4', 'please ship release').context).toContain('npm run release');

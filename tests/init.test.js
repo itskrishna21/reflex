@@ -109,5 +109,6 @@ describe('init', () => {
     const out = JSON.parse(hook('UserPromptSubmit', { session_id: 's2', prompt_id: 'p2', hook_event_name: 'UserPromptSubmit', prompt: 'please lint and fix it' }));
     expect(out.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
     expect(out.hookSpecificOutput.additionalContext).toContain('npm run lint -- --fix');
+    expect(out.systemMessage).toMatch(/^Reflex recalled: "/);
   });
 });

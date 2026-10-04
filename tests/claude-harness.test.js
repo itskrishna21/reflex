@@ -32,6 +32,11 @@ describe('claude harness', () => {
     expect(claude.render(evt, { context: null })).toBe('{}');
     expect(JSON.parse(claude.render(evt, { context: 'use this' })))
       .toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'use this' } });
+    expect(JSON.parse(claude.render(evt, { context: 'use this', notice: 'Reflex recalled: "run build"' })))
+      .toEqual({
+        systemMessage: 'Reflex recalled: "run build"',
+        hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'use this' },
+      });
     expect(claude.render({ type: 'tool' }, { context: null })).toBe('');
   });
 });
