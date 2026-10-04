@@ -1,6 +1,6 @@
 {
   "name": "agent-procedures",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Procedural memory for coding agents",
   "type": "module",
   "bin": {
@@ -8,12 +8,16 @@
   },
   "files": [
     "bin",
-    "lib"
+    "lib",
+    "dist"
   ],
   "engines": {
     "node": ">=18"
   },
   "scripts": {
+    "build": "node scripts/build.js",
+    "pretest": "node scripts/build.js",
+    "prepublishOnly": "node scripts/build.js",
     "test": "vitest run"
   },
   "keywords": [
@@ -34,6 +38,7 @@
   },
   "homepage": "https://github.com/itskrishna21/reflex#readme",
   "devDependencies": {
+    "esbuild": "^0.28.2",
     "vitest": "^5.0.3"
   }
 }

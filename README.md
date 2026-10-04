@@ -54,11 +54,11 @@ The key gets checked before it's saved, so a typo fails right away instead of a 
   config.json        # settings, not memory
   procedures.jsonl   # what it remembered
   runs.jsonl         # optional run outcomes
-  engine/            # the runtime
+  runtime.js         # the engine, one bundled file — do not edit
   traces/            # scratch for the current turn
 ```
 
-`traces/` gets added to `.gitignore`. **Commit everything else**, including `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again to refresh the engine.
+`traces/` gets added to `.gitignore`. **Commit everything else**, including `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
 
 ## Adding a harness
 

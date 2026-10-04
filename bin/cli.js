@@ -25,7 +25,7 @@ if (command === "init") {
     console.log(`  .reflex/config.json       ${results.config}`);
     console.log(`  .reflex/procedures.jsonl  ${results.procedures}`);
     console.log(`  .reflex/runs.jsonl        ${results.runs}`);
-    console.log(`  .reflex/engine/           ${results.engine}`);
+    console.log(`  .reflex/runtime.js        ${results.runtime}`);
     console.log(`  .gitignore                ${results.gitignore}`);
     console.log(`  hooks (${harness || "claude"})            ${results.hooks}`);
     process.exit(0);
