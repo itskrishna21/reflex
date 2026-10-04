@@ -52,6 +52,13 @@ describe('cursor harness', () => {
     expect(JSON.parse(cursor.render(evt, { context: null }))).toEqual({ continue: true });
     expect(JSON.parse(cursor.render(evt, { context: 'use this' })))
       .toEqual({ continue: true, additional_context: 'use this' });
+    expect(JSON.parse(cursor.render(evt, {
+      context: 'use this',
+      notice: 'Reflex recalled: "lint and fix"',
+    }))).toEqual({
+      continue: true,
+      additional_context: 'Reflex recalled: "lint and fix"\n\nuse this',
+    });
     expect(cursor.render({ type: 'tool' }, { context: null })).toBe('');
   });
 });
