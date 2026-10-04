@@ -8,7 +8,7 @@ if (!command || command === "--help" || command === "-h") {
   console.log(`agent-procedures — procedural memory for coding agents (Reflex)
 
 Usage:
-  npx agent-procedures init [--harness claude]   Create .reflex/ and wire hooks
+  npx agent-procedures init [--harness claude|cursor]   Create .reflex/ and wire hooks
   npx agent-procedures auth login                Store an API key for the background groomer
   npx agent-procedures auth status               Show which provider/key the groomer will use
 `);
