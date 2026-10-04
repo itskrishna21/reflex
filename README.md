@@ -52,11 +52,16 @@ The key gets checked before it's saved, so a typo fails right away instead of a 
 ```
 .reflex/
   config.json        # settings, not memory
-  procedures.jsonl   # what it remembered
+  procedures.jsonl   # stable memory (commit this)
   runs.jsonl         # optional run outcomes
   runtime.js         # the engine, one bundled file — do not edit
+  pending.jsonl      # ingest buffer (local, gitignored)
+  processing.jsonl   # batch the groomer is reviewing right now (local)
+  groomer.lock       # single-flight guard for the groomer (local)
   traces/            # scratch for the current turn
 ```
+
+The hot path only appends to `pending.jsonl`. A background groomer renames that buffer to `processing.jsonl`, reviews it, and merges keepers into `procedures.jsonl`. Recall reads all three, so memory works before grooming finishes.
 
 Init ignores everything under `.reflex/` except `config.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those four files**, plus `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
 
