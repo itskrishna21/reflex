@@ -66,7 +66,9 @@ The key gets checked before it's saved, so a typo fails right away instead of a 
 
 The hot path only appends to `pending.jsonl`. A background groomer renames that buffer to `processing.jsonl`, reviews it, and merges keepers into `procedures.jsonl`. Recall reads all three, so memory works before grooming finishes.
 
-Init ignores everything under `.reflex/` except `config.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those four files**, plus the harness wiring (`.claude/settings.json` for Claude Code, or `.cursor/hooks.json` for Cursor), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
+Init ignores everything under `.reflex/` except `config.json`, `package.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those five files**, plus the harness wiring (`.claude/settings.json` for Claude Code, and/or `.cursor/hooks.json` for Cursor), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
+
+You can wire both harnesses in one repo if you use Claude Code and Cursor. Cursor may also load Claude’s hooks via third-party compatibility — if you see double hook runs, turn that off in Cursor settings and keep `.cursor/hooks.json` for Cursor / `.claude/settings.json` for Claude Code.
 
 ## Secrets
 

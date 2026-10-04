@@ -60,7 +60,7 @@ describe('init', () => {
       execSync(`git check-ignore -q "${file}" && echo yes || echo no`, { cwd: DIR, shell: '/bin/sh' })
         .toString().trim() === 'yes';
 
-    for (const file of ['config.json', 'procedures.jsonl', 'runs.jsonl', 'runtime.js']) {
+    for (const file of ['config.json', 'package.json', 'procedures.jsonl', 'runs.jsonl', 'runtime.js']) {
       expect(ignored(`.reflex/${file}`), file).toBe(false);
     }
     expect(ignored('.reflex/traces/t.jsonl')).toBe(true);
@@ -86,6 +86,27 @@ describe('init', () => {
     expect(shim).toContain('from "../../.reflex/runtime.js"');
     expect(shim).toContain('run("claude")');
     expect(JSON.parse(fs.readFileSync(path.join(DIR, '.reflex', 'config.json'), 'utf8')).harness).toBe('claude');
+    expect(JSON.parse(fs.readFileSync(path.join(DIR, '.reflex', 'package.json'), 'utf8'))).toEqual({
+      type: 'module',
+      private: true,
+    });
+  });
+
+  it('loads the shim when the host package is CommonJS', () => {
+    fs.writeFileSync(path.join(DIR, 'package.json'), JSON.stringify({ name: 'host', type: 'commonjs' }));
+    init(DIR, { harness: 'cursor' });
+    const out = execSync(`node .cursor/hooks/reflex.mjs beforeSubmitPrompt`, {
+      cwd: DIR,
+      input: JSON.stringify({
+        conversation_id: 'c',
+        generation_id: 'g',
+        session_id: 'c',
+        hook_event_name: 'beforeSubmitPrompt',
+        prompt: 'hi',
+      }),
+      encoding: 'utf8',
+    });
+    expect(JSON.parse(out)).toEqual({ continue: true });
   });
 
   it('rejects an unknown harness', () => {
