@@ -54,6 +54,8 @@ describe('init', () => {
     fs.mkdirSync(path.join(DIR, '.reflex', 'traces'), { recursive: true });
     fs.writeFileSync(path.join(DIR, '.reflex', 'traces', 't.jsonl'), '');
     fs.writeFileSync(path.join(DIR, '.reflex', 'worker.log'), '');
+    fs.writeFileSync(path.join(DIR, '.reflex', 'pending.jsonl'), '');
+    fs.writeFileSync(path.join(DIR, '.reflex', 'processing.jsonl'), '');
     const ignored = (file) =>
       execSync(`git check-ignore -q "${file}" && echo yes || echo no`, { cwd: DIR, shell: '/bin/sh' })
         .toString().trim() === 'yes';
@@ -63,6 +65,8 @@ describe('init', () => {
     }
     expect(ignored('.reflex/traces/t.jsonl')).toBe(true);
     expect(ignored('.reflex/worker.log')).toBe(true);
+    expect(ignored('.reflex/pending.jsonl')).toBe(true);
+    expect(ignored('.reflex/processing.jsonl')).toBe(true);
   });
 
   it('installs one runtime file and a thin shim, and drops a leftover engine dir', () => {
@@ -98,8 +102,9 @@ describe('init', () => {
     hook('PostToolUse', { ...ids, hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'npm run lint -- --fix' } });
     hook('Stop', { ...ids, hook_event_name: 'Stop', stop_hook_active: false });
 
-    const [node] = fs.readFileSync(path.join(DIR, '.reflex', 'procedures.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    const [node] = fs.readFileSync(path.join(DIR, '.reflex', 'pending.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
     expect(node.steps).toEqual([{ t: 'Bash', target: 'npm run lint -- --fix' }]);
+    expect(fs.readFileSync(path.join(DIR, '.reflex', 'procedures.jsonl'), 'utf8').trim()).toBe('');
 
     const out = JSON.parse(hook('UserPromptSubmit', { session_id: 's2', prompt_id: 'p2', hook_event_name: 'UserPromptSubmit', prompt: 'please lint and fix it' }));
     expect(out.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
