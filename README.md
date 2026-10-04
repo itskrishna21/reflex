@@ -18,9 +18,10 @@ You don't run either of these manually. You just use your agent.
 
 ## Status & Harnesses
 
-Early. Reflex is built to plug into different agent platforms (harnesses). Right now, **Claude Code is the only one built** and is the default.
+Early. Reflex plugs into agent platforms through thin harness adapters.
 
-I set the engine up so Cursor and others can plug in later, but the adapters for those don't exist yet.
+- **Claude Code** — default (`npx agent-procedures init`)
+- **Cursor** — `npx agent-procedures init --harness cursor`
 
 ## Install
 
@@ -28,11 +29,13 @@ Run this in the repo you want Reflex in:
 
 ```bash
 npx agent-procedures init
+# or
+npx agent-procedures init --harness cursor
 ```
 
-By default this installs the Claude Code harness. If you were using a different one later, you'd run `npx agent-procedures init --harness cursor`. 
-
 Installing the package on its own won't do anything. You need `init`. It creates the folders, copies the runtime in, and adds a hook so your agent knows to call it.
+
+For Cursor, init writes `.cursor/hooks.json` and a shim under `.cursor/hooks/`. The hook command uses the absolute path to the `node` that ran init, because Cursor's hook shell often doesn't see nvm on `PATH`.
 
 ## API key (for the background groomer)
 
@@ -63,7 +66,7 @@ The key gets checked before it's saved, so a typo fails right away instead of a 
 
 The hot path only appends to `pending.jsonl`. A background groomer renames that buffer to `processing.jsonl`, reviews it, and merges keepers into `procedures.jsonl`. Recall reads all three, so memory works before grooming finishes.
 
-Init ignores everything under `.reflex/` except `config.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those four files**, plus `.claude/settings.json` (the hook wiring), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
+Init ignores everything under `.reflex/` except `config.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those four files**, plus the harness wiring (`.claude/settings.json` for Claude Code, or `.cursor/hooks.json` for Cursor), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
 
 ## Secrets
 

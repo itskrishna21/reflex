@@ -92,6 +92,63 @@ describe('init', () => {
     expect(() => init(DIR, { harness: 'nope' })).toThrow(/Unknown harness "nope"/);
   });
 
+  it('wires Cursor hooks with an absolute node path and preserves unrelated hooks', () => {
+    fs.mkdirSync(path.join(DIR, '.cursor'), { recursive: true });
+    fs.writeFileSync(path.join(DIR, '.cursor', 'hooks.json'), JSON.stringify({
+      version: 1,
+      hooks: { stop: [{ command: 'echo done' }] },
+    }));
+
+    init(DIR, { harness: 'cursor' });
+    init(DIR, { harness: 'cursor' });
+
+    const hooks = JSON.parse(fs.readFileSync(path.join(DIR, '.cursor', 'hooks.json'), 'utf8'));
+    expect(hooks.version).toBe(1);
+    expect(hooks.hooks.stop[0].command).toBe('echo done');
+    expect(hooks.hooks.stop).toHaveLength(2);
+    for (const ev of ['beforeSubmitPrompt', 'postToolUse', 'postToolUseFailure', 'stop']) {
+      const ours = hooks.hooks[ev].find((h) => String(h.command).includes('.cursor/hooks/reflex.mjs'));
+      expect(ours.command).toBe(`"${process.execPath}" .cursor/hooks/reflex.mjs ${ev}`);
+    }
+    const shim = fs.readFileSync(path.join(DIR, '.cursor', 'hooks', 'reflex.mjs'), 'utf8');
+    expect(shim).toContain('run("cursor")');
+    expect(JSON.parse(fs.readFileSync(path.join(DIR, '.reflex', 'config.json'), 'utf8')).harness).toBe('cursor');
+  });
+
+  it('shim runs end to end the way Cursor would call it', () => {
+    init(DIR, { harness: 'cursor' });
+    const hook = (event, payload) =>
+      execSync(`node .cursor/hooks/reflex.mjs ${event}`, { cwd: DIR, input: JSON.stringify(payload), encoding: 'utf8' });
+    const ids = { conversation_id: 's1', generation_id: 'p1', session_id: 's1' };
+
+    expect(JSON.parse(hook('beforeSubmitPrompt', {
+      ...ids,
+      hook_event_name: 'beforeSubmitPrompt',
+      prompt: 'lint and fix',
+    }))).toEqual({ continue: true });
+
+    hook('postToolUse', {
+      ...ids,
+      hook_event_name: 'postToolUse',
+      tool_name: 'Shell',
+      tool_input: { command: 'npm run lint -- --fix' },
+    });
+    hook('stop', { ...ids, hook_event_name: 'stop', status: 'completed', loop_count: 0 });
+
+    const [node] = fs.readFileSync(path.join(DIR, '.reflex', 'pending.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
+    expect(node.steps).toEqual([{ t: 'Bash', target: 'npm run lint -- --fix' }]);
+
+    const out = JSON.parse(hook('beforeSubmitPrompt', {
+      conversation_id: 's2',
+      generation_id: 'p2',
+      session_id: 's2',
+      hook_event_name: 'beforeSubmitPrompt',
+      prompt: 'please lint and fix it',
+    }));
+    expect(out.continue).toBe(true);
+    expect(out.additional_context).toContain('npm run lint -- --fix');
+  });
+
   it('shim runs end to end the way Claude Code would call it', () => {
     init(DIR);
     const hook = (event, payload) =>
