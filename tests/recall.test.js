@@ -1,0 +1,92 @@
+import { describe, it, expect } from 'vitest';
+import { calculateCoverage, recall, tokenize } from '../lib/recall.js';
+
+describe('tokenize', () => {
+  it('lowercases, splits on punctuation, and drops stop words', () => {
+    expect(tokenize('Please fix the auth-token bug!')).toEqual(['fix', 'auth', 'token', 'bug']);
+  });
+});
+
+describe('calculateCoverage', () => {
+  it('scores trigger coverage without diluting on long prompts', () => {
+    const prompt = tokenize('can you please start fixing the auth tokens in login');
+    expect(calculateCoverage(prompt, 'fix auth token')).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it('accepts unidirectional prefix morphology', () => {
+    const prompt = tokenize('fixing tokens now');
+    expect(calculateCoverage(prompt, 'fix token')).toBe(1);
+  });
+
+  it('does not let short prompt tokens hijack longer trigger words', () => {
+    const prompt = tokenize('post the java patch');
+    expect(calculateCoverage(prompt, 'postgres javascript')).toBe(0);
+  });
+
+  it('rejects thin single-word matches like build/error', () => {
+    expect(calculateCoverage(tokenize('please build this'), 'build')).toBe(0);
+    expect(calculateCoverage(tokenize('see the error'), 'error')).toBe(0);
+  });
+
+  it('allows a single high-value word of length >= 6', () => {
+    expect(calculateCoverage(tokenize('run postgres locally'), 'postgres')).toBe(1);
+  });
+});
+
+describe('recall', () => {
+  it('picks the highest scoring root and attaches alt text', () => {
+    const procs = [
+      {
+        id: 'weak',
+        trigger: 'fix auth',
+        steps: [{ t: 'Bash', target: 'echo weak' }],
+        enabled: true,
+      },
+      {
+        id: 'strong',
+        trigger: 'fix auth token bug',
+        steps: [{ t: 'Bash', target: 'echo strong' }],
+        enabled: true,
+      },
+      {
+        parent_id: 'strong',
+        type: 'alt',
+        steps: [{ t: 'Bash', target: 'echo alt' }],
+      },
+      {
+        id: 'off',
+        trigger: 'fix auth token bug',
+        steps: [{ t: 'Bash', target: 'echo off' }],
+        enabled: false,
+      },
+    ];
+
+    const hit = recall('please fix the auth token bug', procs);
+    expect(hit.node.id).toBe('strong');
+    expect(hit.text).toContain('echo strong');
+    expect(hit.text).toContain('echo alt');
+    expect(hit.text).not.toContain('echo off');
+    expect(hit.text).not.toContain('echo weak');
+  });
+
+  it('matches via alias when the main trigger does not', () => {
+    const hit = recall('compile it please', [
+      {
+        id: 'abc',
+        trigger: 'run production build pipeline',
+        aliases: ['compile it'],
+        steps: [{ t: 'Bash', target: 'npm run build' }],
+        enabled: true,
+      },
+    ]);
+    expect(hit.node.id).toBe('abc');
+  });
+
+  it('returns null when nothing clears the floor', () => {
+    expect(
+      recall('unrelated chat', [
+        { id: 'abc', trigger: 'migrate postgres', steps: [{ t: 'Bash', target: 'x' }], enabled: true },
+      ]),
+    ).toBeNull();
+  });
+});

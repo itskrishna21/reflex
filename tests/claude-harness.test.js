@@ -16,9 +16,9 @@ describe('claude harness', () => {
       .toMatchObject({ type: 'tool', tool: 'Edit', target: '/a.js', ok: false });
   });
 
-  it('normalizes Stop flags', () => {
+  it('normalizes Stop flags without treating stop_hook_active as interrupt', () => {
     expect(claude.normalize('Stop', { ...base, stop_hook_active: true, background_tasks: [] }))
-      .toEqual({ type: 'stop', sessionId: 's', promptId: 'p', interrupted: true, busy: false });
+      .toEqual({ type: 'stop', sessionId: 's', promptId: 'p', interrupted: false, busy: false });
     expect(claude.normalize('Stop', { ...base, stop_hook_active: false, background_tasks: [{ id: 't' }] }).busy).toBe(true);
   });
 

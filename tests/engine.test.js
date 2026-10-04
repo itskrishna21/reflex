@@ -143,6 +143,14 @@ describe('engine', () => {
     expect(fs.existsSync(pendingPath())).toBe(false);
   });
 
+  it('stop drops continuation stumps that have no Goal line', () => {
+    // Mimic PostToolUse after the first Stop deleted the trace: append-only, no Goal.
+    tool('s', 'p', 'Write', 'a.js');
+    stop('s', 'p');
+    expect(fs.existsSync(pendingPath())).toBe(false);
+    expect(fs.existsSync(trace('s', 'p'))).toBe(false);
+  });
+
   it('recall matches trigger or alias from stable or pending', () => {
     seed([{ id: 'abc', trigger: 'run build', aliases: ['compile it'], steps: [{ t: 'Bash', target: 'npm run build' }], enabled: true }]);
 
@@ -170,17 +178,15 @@ describe('engine', () => {
     expect(context).toContain('Requires environment: DATABASE_URL');
   });
 
-  it('recall skips disabled nodes and edges, includes alt/on_fail text', () => {
+  it('recall skips disabled nodes and edges, includes alt text', () => {
     seed([
       { id: 'off', trigger: 'run build', steps: [{ t: 'Bash', target: 'nope' }], enabled: false },
       { id: 'abc', trigger: 'run build', steps: [{ t: 'Bash', target: 'npm run build' }], enabled: true },
       { parent_id: 'abc', type: 'alt', steps: [{ t: 'Bash', target: 'npm run build:prod' }] },
-      { parent_id: 'abc', type: 'on_fail', steps: [{ t: 'Bash', target: 'rm -rf node_modules' }] },
     ]);
     const { context } = prompt('s', 'p', 'run build');
     expect(context).not.toContain('nope');
     expect(context).toContain('Alternative path that worked:\n- Bash: npm run build:prod');
-    expect(context).toContain('recovery worked:\n- Bash: rm -rf node_modules');
   });
 
   it('diverging from a recall hit writes an alt edge to pending; same steps write nothing', () => {
