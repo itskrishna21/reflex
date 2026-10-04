@@ -49,6 +49,21 @@ describe("groomer", () => {
     expect(log).not.toContain("DO-NOT-LOG");
   });
 
+  it("retries a stuck processing batch after an API failure", async () => {
+    seedPending([{ id: "a", trigger: "one", steps: [], status: "pending_review" }]);
+    vi.spyOn(PROVIDERS.openai, "complete")
+      .mockRejectedValueOnce(new Error("OpenAI API error: 400 - use max_completion_tokens"))
+      .mockResolvedValueOnce(JSON.stringify([{ id: "a", action: "KEEP", aliases: ["x"] }]));
+
+    await runGroomer(DIR);
+    expect(fs.existsSync(paths(DIR).processingFile)).toBe(true);
+    expect(readNodes(paths(DIR).proceduresFile)).toEqual([]);
+
+    await runGroomer(DIR);
+    expect(readNodes(paths(DIR).proceduresFile).map((n) => n.id)).toEqual(["a"]);
+    expect(fs.existsSync(paths(DIR).processingFile)).toBe(false);
+  });
+
   it("preserves hot-path appends that land after pending is claimed", async () => {
     seedPending([{ id: "a", trigger: "one", steps: [], status: "pending_review" }]);
     expect(claimPendingBatch(DIR)).toBe(paths(DIR).processingFile);
