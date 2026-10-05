@@ -6,6 +6,7 @@ import { GROOM_MAX_ATTEMPTS, runGroomer } from "../lib/groomer.js";
 import { PROVIDERS } from "../lib/providers.js";
 import {
   GROOM_LOCK_STALE_MS,
+  SESSION_STALE_MS,
   appendPending,
   claimPendingBatch,
   paths,
@@ -53,7 +54,7 @@ describe("groomer", () => {
     seedPending([{ id: "a", trigger: "one", steps: [], status: "pending_review" }]);
     vi.spyOn(PROVIDERS.openai, "complete")
       .mockRejectedValueOnce(new Error("OpenAI API error: 400 - use max_completion_tokens"))
-      .mockResolvedValueOnce(JSON.stringify([{ id: "a", action: "KEEP", aliases: ["x"] }]));
+      .mockResolvedValueOnce(JSON.stringify([{ id: "a", action: "KEEP", trigger: "groomed", aliases: ["x"] }]));
 
     await runGroomer(DIR);
     expect(fs.existsSync(paths(DIR).processingFile)).toBe(true);
@@ -72,7 +73,7 @@ describe("groomer", () => {
     expect(readNodes(paths(DIR).pendingFile).map((n) => n.id)).toEqual(["hot"]);
 
     vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
-      JSON.stringify([{ id: "a", action: "KEEP", aliases: ["x"] }]),
+      JSON.stringify([{ id: "a", action: "KEEP", trigger: "groomed", aliases: ["x"] }]),
     );
 
     await runGroomer(DIR);
@@ -90,7 +91,7 @@ describe("groomer", () => {
 
     vi.spyOn(PROVIDERS.openai, "complete").mockImplementation(async (_k, _m, prompt) => {
       if (prompt.includes('"id": "hot"') || prompt.includes('"id":"hot"')) {
-        return JSON.stringify([{ id: "hot", action: "KEEP", aliases: ["hot"] }]);
+        return JSON.stringify([{ id: "hot", action: "KEEP", trigger: "groomed", aliases: ["hot"] }]);
       }
       appendPending(DIR, {
         id: "hot",
@@ -99,8 +100,8 @@ describe("groomer", () => {
         status: "pending_review",
       });
       return JSON.stringify([
-        { id: "a", action: "KEEP", aliases: ["first"] },
-        { id: "b", action: "KEEP", aliases: ["second"] },
+        { id: "a", action: "KEEP", trigger: "groomed", aliases: ["first"] },
+        { id: "b", action: "KEEP", trigger: "groomed", aliases: ["second"] },
       ]);
     });
 
@@ -129,7 +130,7 @@ describe("groomer", () => {
   it("strips groom_attempts when a retried row is finally kept", async () => {
     seedPending([{ id: "a", trigger: "one", steps: [], status: "pending_review", groom_attempts: 1 }]);
     vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
-      JSON.stringify([{ id: "a", action: "KEEP", aliases: ["x"] }]),
+      JSON.stringify([{ id: "a", action: "KEEP", trigger: "groomed", aliases: ["x"] }]),
     );
 
     await runGroomer(DIR);
@@ -156,7 +157,7 @@ describe("groomer", () => {
     );
     seedPending([{ id: "a", trigger: "one", steps: [], status: "pending_review" }]);
     vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
-      JSON.stringify([{ id: "a", action: "KEEP", aliases: ["x"] }]),
+      JSON.stringify([{ id: "a", action: "KEEP", trigger: "groomed", aliases: ["x"] }]),
     );
 
     const result = await runGroomer(DIR);
@@ -170,7 +171,7 @@ describe("groomer", () => {
       { id: "legacy", trigger: "old", steps: [], status: "pending_review" },
     ]);
     vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
-      JSON.stringify([{ id: "legacy", action: "KEEP", aliases: ["legacy"] }]),
+      JSON.stringify([{ id: "legacy", action: "KEEP", trigger: "groomed", aliases: ["legacy"] }]),
     );
 
     await runGroomer(DIR);
@@ -178,5 +179,84 @@ describe("groomer", () => {
     const stable = readNodes(paths(DIR).proceduresFile);
     expect(stable.map((n) => n.id).sort()).toEqual(["legacy", "stable"]);
     expect(stable.find((n) => n.id === "legacy").status).toBeUndefined();
+  });
+
+  it("sends the transcript and replaces trigger, aliases and steps; transcript never reaches procedures", async () => {
+    const transcript = [
+      { role: "user", text: "build auth" },
+      { role: "agent", text: "Option A: JWT. Option B: OAuth." },
+      { role: "user", text: "pick option A" },
+    ];
+    seedPending([
+      {
+        id: "a",
+        title: "pick option A",
+        trigger: "pick option A",
+        transcript,
+        steps: [{ t: "Write", target: "/Users/me/app/src/auth.js" }],
+        status: "pending_review",
+      },
+    ]);
+    const spy = vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
+      JSON.stringify([
+        {
+          id: "a",
+          action: "KEEP",
+          trigger: "Add JWT auth",
+          aliases: ["set up jwt"],
+          steps: [{ t: "Write", target: "the auth module" }],
+        },
+      ]),
+    );
+
+    await runGroomer(DIR);
+
+    expect(spy.mock.calls[0][2]).toContain("Option A: JWT. Option B: OAuth.");
+    const [node] = readNodes(paths(DIR).proceduresFile);
+    expect(node).toMatchObject({
+      id: "a",
+      title: "Add JWT auth",
+      trigger: "Add JWT auth",
+      aliases: ["set up jwt"],
+      steps: [{ t: "Write", target: "the auth module" }],
+    });
+    expect(node.transcript).toBeUndefined();
+    expect(fs.readFileSync(paths(DIR).proceduresFile, "utf8")).not.toContain("/Users/me");
+  });
+
+  it("re-queues a kept root that came back without a trigger", async () => {
+    seedPending([{ id: "a", trigger: "pick option A", steps: [], status: "pending_review" }]);
+    vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
+      JSON.stringify([{ id: "a", action: "KEEP", aliases: ["x"] }]),
+    );
+
+    await runGroomer(DIR);
+
+    expect(readNodes(paths(DIR).proceduresFile)).toEqual([]);
+    expect(readNodes(paths(DIR).pendingFile)).toEqual([
+      expect.objectContaining({ id: "a", trigger: "pick option A", groom_attempts: 1 }),
+    ]);
+  });
+
+  it("keeps the recorded steps when the model's steps are malformed", async () => {
+    seedPending([{ id: "a", trigger: "x", steps: [{ t: "Bash", target: "npm test" }], status: "pending_review" }]);
+    vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
+      JSON.stringify([{ id: "a", action: "KEEP", trigger: "Run tests", steps: [{ t: "Bash" }] }]),
+    );
+
+    await runGroomer(DIR);
+    expect(readNodes(paths(DIR).proceduresFile)[0].steps).toEqual([{ t: "Bash", target: "npm test" }]);
+  });
+
+  it("deletes session scratchpads older than a week", async () => {
+    const dir = paths(DIR).sessionsDir;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "old.jsonl"), "{}\n");
+    fs.writeFileSync(path.join(dir, "fresh.jsonl"), "{}\n");
+    const old = (Date.now() - SESSION_STALE_MS - 1000) / 1000;
+    fs.utimesSync(path.join(dir, "old.jsonl"), old, old);
+
+    await runGroomer(DIR);
+    expect(fs.readdirSync(dir)).toEqual(["fresh.jsonl"]);
   });
 });

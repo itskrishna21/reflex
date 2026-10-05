@@ -22,6 +22,10 @@ describe('claude harness', () => {
     expect(claude.normalize('Stop', { ...base, stop_hook_active: false, background_tasks: [{ id: 't' }] }).busy).toBe(true);
   });
 
+  it('passes last_assistant_message through Stop as the reply', () => {
+    expect(claude.normalize('Stop', { ...base, last_assistant_message: 'Option A or B?' }).reply).toBe('Option A or B?');
+  });
+
   it('prefers hook_event_name over argv and ignores unknown events', () => {
     expect(claude.normalize('Stop', { ...base, hook_event_name: 'UserPromptSubmit', prompt: 'x' }).type).toBe('prompt');
     expect(claude.normalize('SessionStart', { ...base, hook_event_name: 'SessionStart' })).toBeNull();

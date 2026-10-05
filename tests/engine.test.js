@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { handleEvent, GROOM_THRESHOLD } from '../lib/engine.js';
+import { handleEvent, GROOM_THRESHOLD, REDACTED_TEXT } from '../lib/engine.js';
 
 let DIR;
 const pendingPath = () => path.join(DIR, 'pending.jsonl');
@@ -151,7 +151,7 @@ describe('engine', () => {
     expect(fs.existsSync(trace('s', 'p'))).toBe(false);
   });
 
-  it('recall matches trigger or alias from stable or pending', () => {
+  it('recall matches trigger or alias from stable only', () => {
     seed([{ id: 'abc', trigger: 'run build', aliases: ['compile it'], steps: [{ t: 'Bash', target: 'npm run build' }], enabled: true }]);
 
     const r1 = prompt('s', 'p1', 'hey please run build for me');
@@ -163,7 +163,7 @@ describe('engine', () => {
     expect(prompt('s', 'p3', 'unrelated')).toEqual({ context: null, notice: null });
 
     seedPending([{ id: 'pend', trigger: 'ship release', steps: [{ t: 'Bash', target: 'npm run release' }], enabled: true, status: 'pending_review' }]);
-    expect(prompt('s', 'p4', 'please ship release').context).toContain('npm run release');
+    expect(prompt('s', 'p4', 'please ship release')).toEqual({ context: null, notice: null });
   });
 
   it('recall names required environment variables', () => {
@@ -217,5 +217,85 @@ describe('engine', () => {
     }
     expect(spawnGroomer).toHaveBeenCalledTimes(1);
     expect(pending()).toHaveLength(GROOM_THRESHOLD);
+  });
+});
+
+describe('session window', () => {
+  const reply = (s, p, text) => handleEvent({ type: 'reply', sessionId: s, promptId: p, text }, DIR);
+
+  it('a "pick option A" turn carries the earlier ask and the agent offer', () => {
+    prompt('s', 'p1', 'build auth');
+    tool('s', 'p1', 'Read', 'src/app.js');
+    reply('s', 'p1', 'Option A: JWT. Option B: OAuth. Which one?');
+    stop('s', 'p1');
+    expect(pending()).toHaveLength(0);
+
+    prompt('s', 'p2', 'pick option A');
+    tool('s', 'p2', 'Write', 'src/auth.js');
+    reply('s', 'p2', 'Done, JWT auth added.');
+    stop('s', 'p2');
+
+    expect(pending()[0].transcript).toEqual([
+      { role: 'user', text: 'build auth' },
+      { role: 'agent', text: 'Option A: JWT. Option B: OAuth. Which one?' },
+      { role: 'user', text: 'pick option A' },
+      { role: 'agent', text: 'Done, JWT auth added.' },
+    ]);
+  });
+
+  it('the raw "pick option A" row is not recalled before grooming', () => {
+    prompt('s', 'p1', 'pick option A');
+    tool('s', 'p1', 'Write', 'src/auth.js');
+    stop('s', 'p1');
+    expect(pending()).toHaveLength(1);
+
+    expect(prompt('s2', 'p1', 'pick option A')).toEqual({ context: null, notice: null });
+  });
+
+  it('a reply after Stop never recreates the trace and shows up in the next window', () => {
+    prompt('s', 'p1', 'explain the options');
+    stop('s', 'p1');
+    reply('s', 'p1', 'Option A or B?');
+    expect(fs.existsSync(trace('s', 'p1'))).toBe(false);
+
+    prompt('s', 'p2', 'pick A');
+    tool('s', 'p2', 'Write', 'a.js');
+    stop('s', 'p2');
+    expect(pending()[0].transcript.map((t) => t.text)).toEqual(['explain the options', 'Option A or B?', 'pick A']);
+  });
+
+  it('keeps only the latest reply per turn and the last 5 turns', () => {
+    for (let i = 1; i <= 6; i++) {
+      prompt('s', `p${i}`, `ask ${i}`);
+      reply('s', `p${i}`, `draft ${i}`);
+      reply('s', `p${i}`, `final ${i}`);
+      stop('s', `p${i}`);
+    }
+    prompt('s', 'p7', 'ask 7');
+    tool('s', 'p7', 'Write', 'a.js');
+    stop('s', 'p7');
+
+    const texts = pending()[0].transcript.map((t) => t.text);
+    expect(texts).toEqual(['ask 3', 'final 3', 'ask 4', 'final 4', 'ask 5', 'final 5', 'ask 6', 'final 6', 'ask 7']);
+  });
+
+  it('redacts a reply with an unresolvable secret but still learns the turn', () => {
+    const token = `ghp_${'a1'.repeat(18)}`;
+    prompt('s', 'p1', 'set up the deploy token');
+    tool('s', 'p1', 'Write', 'deploy.yml');
+    reply('s', 'p1', `Use ${token} in CI.`);
+    stop('s', 'p1');
+
+    const [row] = pending();
+    expect(row.transcript[1]).toEqual({ role: 'agent', text: REDACTED_TEXT });
+    expect(row.steps).toEqual([{ t: 'Write', target: 'deploy.yml' }]);
+    expect(fs.readFileSync(pendingPath(), 'utf8')).not.toContain(token);
+  });
+
+  it('takes the reply from Stop when the harness sends it there', () => {
+    prompt('s', 'p1', 'add a loading skeleton');
+    tool('s', 'p1', 'Write', 'list.tsx');
+    stop('s', 'p1', undefined, { reply: 'Added skeleton rows.' });
+    expect(pending()[0].transcript.at(-1)).toEqual({ role: 'agent', text: 'Added skeleton rows.' });
   });
 });

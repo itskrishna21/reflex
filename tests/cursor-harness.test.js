@@ -32,6 +32,11 @@ describe('cursor harness', () => {
     })).toMatchObject({ type: 'tool', tool: 'Write', target: '/a.js', ok: false });
   });
 
+  it('normalizes afterAgentResponse into a reply', () => {
+    expect(cursor.normalize('afterAgentResponse', { ...base, text: 'Option A or B?' }))
+      .toEqual({ type: 'reply', sessionId: 'c', promptId: 'g', text: 'Option A or B?' });
+  });
+
   it('normalizes stop flags from status', () => {
     expect(cursor.normalize('stop', { ...base, status: 'completed', loop_count: 0 }))
       .toEqual({ type: 'stop', sessionId: 'c', promptId: 'g', interrupted: false, busy: false });

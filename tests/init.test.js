@@ -7,6 +7,8 @@ import { init } from '../lib/init.js';
 
 let DIR;
 const settings = () => JSON.parse(fs.readFileSync(path.join(DIR, '.claude', 'settings.json'), 'utf8'));
+const groom = ({ transcript, status, ...node }) =>
+  fs.writeFileSync(path.join(DIR, '.reflex', 'procedures.jsonl'), JSON.stringify(node) + '\n');
 
 beforeEach(() => { DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'reflex-init-')); });
 afterEach(() => { fs.rmSync(DIR, { recursive: true, force: true }); });
@@ -127,7 +129,7 @@ describe('init', () => {
     expect(hooks.version).toBe(1);
     expect(hooks.hooks.stop[0].command).toBe('echo done');
     expect(hooks.hooks.stop).toHaveLength(2);
-    for (const ev of ['beforeSubmitPrompt', 'postToolUse', 'postToolUseFailure', 'stop']) {
+    for (const ev of ['beforeSubmitPrompt', 'postToolUse', 'postToolUseFailure', 'afterAgentResponse', 'stop']) {
       const ours = hooks.hooks[ev].find((h) => String(h.command).includes('.cursor/hooks/reflex.mjs'));
       expect(ours.command).toBe(`"${process.execPath}" .cursor/hooks/reflex.mjs ${ev}`);
     }
@@ -158,14 +160,19 @@ describe('init', () => {
 
     const [node] = fs.readFileSync(path.join(DIR, '.reflex', 'pending.jsonl'), 'utf8').trim().split('\n').map(JSON.parse);
     expect(node.steps).toEqual([{ t: 'Bash', target: 'npm run lint -- --fix' }]);
+    expect(node.transcript).toEqual([{ role: 'user', text: 'lint and fix' }]);
 
-    const out = JSON.parse(hook('beforeSubmitPrompt', {
+    const ask = () => JSON.parse(hook('beforeSubmitPrompt', {
       conversation_id: 's2',
       generation_id: 'p2',
       session_id: 's2',
       hook_event_name: 'beforeSubmitPrompt',
       prompt: 'please lint and fix it',
     }));
+    expect(ask()).toEqual({ continue: true });
+
+    groom(node);
+    const out = ask();
     expect(out.continue).toBe(true);
     expect(out.additional_context).toContain('npm run lint -- --fix');
   });
@@ -184,6 +191,7 @@ describe('init', () => {
     expect(node.steps).toEqual([{ t: 'Bash', target: 'npm run lint -- --fix' }]);
     expect(fs.readFileSync(path.join(DIR, '.reflex', 'procedures.jsonl'), 'utf8').trim()).toBe('');
 
+    groom(node);
     const out = JSON.parse(hook('UserPromptSubmit', { session_id: 's2', prompt_id: 'p2', hook_event_name: 'UserPromptSubmit', prompt: 'please lint and fix it' }));
     expect(out.hookSpecificOutput.hookEventName).toBe('UserPromptSubmit');
     expect(out.hookSpecificOutput.additionalContext).toContain('npm run lint -- --fix');
