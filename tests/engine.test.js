@@ -111,6 +111,8 @@ describe('engine', () => {
     const [node] = pending();
     expect(node).toMatchObject({ title: 'test task', trigger: 'test task', status: 'pending_review', enabled: true });
     expect(node.steps).toEqual([{ t: 'Bash', target: 'npm test' }]);
+    expect(node.cold_tools).toBe(2);
+    expect(node.cold_est_tokens).toBe(1200);
     expect(procs()).toEqual([]);
     expect(fs.existsSync(trace('s', 'p'))).toBe(false);
   });
@@ -172,6 +174,23 @@ describe('engine', () => {
 
     seedPending([{ id: 'pend', trigger: 'ship release', steps: [{ t: 'Bash', target: 'npm run release' }], enabled: true, status: 'pending_review' }]);
     expect(prompt('s', 'p4', 'please ship release')).toEqual({ context: null, notice: null });
+  });
+
+  it('a recall hit appends a local hits.jsonl row', () => {
+    seed([{
+      id: 'abc',
+      trigger: 'run build',
+      steps: [{ t: 'Bash', target: 'npm run build' }],
+      cold_tools: 8,
+      cold_est_tokens: 4800,
+      enabled: true,
+    }]);
+    prompt('s', 'p1', 'hey please run build for me');
+    const hitsPath = path.join(DIR, 'hits.jsonl');
+    const [hit] = fs.readFileSync(hitsPath, 'utf8').trim().split('\n').map(JSON.parse);
+    expect(hit).toMatchObject({ session: 's', procedure: 'abc', trigger: 'run build' });
+    expect(hit.saved_tokens).toBeGreaterThan(0);
+    expect(hit.steps).toEqual([{ t: 'Bash', target: 'npm run build' }]);
   });
 
   it('recall names required environment variables', () => {

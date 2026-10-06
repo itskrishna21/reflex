@@ -9,6 +9,7 @@ if (!command || command === "--help" || command === "-h") {
 
 Usage:
   npx agent-procedures init [--harness claude|cursor]   Create .reflex/ and wire hooks
+  npx agent-procedures ui [--port 7373] [--open]        Hits dashboard for this repo
   npx agent-procedures auth login                Store an API key for the background groomer
   npx agent-procedures auth status               Show which provider/key the groomer will use
 `);
@@ -35,7 +36,20 @@ if (command === "init") {
   }
 }
 
-if (command === "auth") {
+if (command === "ui") {
+  const args = process.argv.slice(3);
+  const i = args.indexOf("--port");
+  const port = i >= 0 ? Number(args[i + 1]) : 7373;
+  const open = args.includes("--open");
+  try {
+    const { startUi } = await import("../lib/ui.js");
+    const { url } = await startUi({ cwd: process.cwd(), port, open });
+    console.log(`Reflex UI ${url}`);
+  } catch (e) {
+    console.error(`Error: ${e.message}`);
+    process.exit(1);
+  }
+} else if (command === "auth") {
   const { login, status, USAGE } = await import("../lib/auth.js");
   const [sub, ...rest] = process.argv.slice(3);
   try {
