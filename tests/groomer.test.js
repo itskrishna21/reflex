@@ -259,4 +259,27 @@ describe("groomer", () => {
     await runGroomer(DIR);
     expect(fs.readdirSync(dir)).toEqual(["fresh.jsonl"]);
   });
+
+  it("skips the LLM for identical step paths already in stable or in the batch", async () => {
+    const steps = [{ t: "Write", target: "empty.tsx" }];
+    writeJsonlAtomic(paths(DIR).proceduresFile, [{ id: "stable", trigger: "tweak empty copy", steps, enabled: true }]);
+    seedPending([
+      { id: "dup-stable", trigger: "again", steps, status: "pending_review" },
+      { id: "a", trigger: "first", steps: [{ t: "Write", target: "paywall.tsx" }], status: "pending_review" },
+      { id: "b", trigger: "second", steps: [{ t: "Write", target: "paywall.tsx" }], status: "pending_review" },
+    ]);
+    const spy = vi.spyOn(PROVIDERS.openai, "complete").mockResolvedValue(
+      JSON.stringify([{ id: "a", action: "KEEP", trigger: "tweak paywall copy", aliases: ["paywall empty state"] }]),
+    );
+
+    await runGroomer(DIR);
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0][2]).toContain('"id": "a"');
+    expect(spy.mock.calls[0][2]).not.toContain("dup-stable");
+    expect(spy.mock.calls[0][2]).not.toContain('"id": "b"');
+    const ids = readNodes(paths(DIR).proceduresFile).map((n) => n.id).sort();
+    expect(ids).toEqual(["a", "stable"]);
+    expect(readNodes(paths(DIR).pendingFile)).toEqual([]);
+  });
 });

@@ -136,6 +136,14 @@ describe('engine', () => {
     expect(pending()).toHaveLength(1);
   });
 
+  it('stop still learns a write when a verify shell fails', () => {
+    prompt('s', 'p', 'add accountant mailto');
+    tool('s', 'p', 'Write', 'expense.tsx');
+    tool('s', 'p', 'Bash', 'npm run lint', false);
+    stop('s', 'p');
+    expect(pending()[0].steps).toEqual([{ t: 'Write', target: 'expense.tsx' }]);
+  });
+
   it('stop drops interrupted or busy turns', () => {
     prompt('s', 'p', 'x');
     tool('s', 'p', 'Write', 'a.js');
@@ -250,6 +258,19 @@ describe('session window', () => {
     expect(pending()).toHaveLength(1);
 
     expect(prompt('s2', 'p1', 'pick option A')).toEqual({ context: null, notice: null });
+  });
+
+  it('anaphoric follow-up recalls using earlier turns in the same session', () => {
+    seed([{
+      id: 'r2',
+      trigger: 'add receipt upload',
+      steps: [{ t: 'Write', target: 'lib/r2.ts' }],
+      enabled: true,
+    }]);
+
+    prompt('s', 'p1', 'please add receipt upload to expenses');
+    expect(prompt('s', 'p2', 'do the same for split bills').context).toContain('lib/r2.ts');
+    expect(prompt('other', 'p1', 'do the same for split bills')).toEqual({ context: null, notice: null });
   });
 
   it('a reply after Stop never recreates the trace and shows up in the next window', () => {
