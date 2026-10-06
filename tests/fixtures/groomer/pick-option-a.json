@@ -1,0 +1,56 @@
+{
+  "name": "pick option A resolves to a skeleton loading state",
+  "source": "Ripple, Cursor Agent chat, 2026-10-05 (live hook capture)",
+  "row": {
+    "id": "zab4eni69",
+    "trigger": "pick option A",
+    "transcript": [
+      {
+        "role": "user",
+        "text": "I want a loading state on the competitors list page. Give me two options, A and B, then stop and wait for me to pick. Don't edit anything yet."
+      },
+      {
+        "role": "agent",
+        "text": "Sir, the competitors page already has a loading state. While `getCompetitors` is in flight, `frontend/src/app/competitors/page.tsx` shows a small centered spinner (`<PageLoading />`, 160px tall) and the subtitle reads \"…\" instead of \"N tracked\". So the two options below are upgrades to what's there, not a first version.\n\n```204:206:frontend/src/app/competitors/page.tsx\n      {isLoading ? (\n        <PageLoading />\n      ) : competitors.length === 0 ? (\n```\n\n**Option A: skeleton table.** While loading, show the real table frame (border and the Name / Website / Sources header) with about 4 placeholder rows of pulsing grey bars. When the data arrives, the real rows replace them in the same spot, so nothing jumps.\n- Change: one file, about 20 lines inline. No new shared component.\n- Tradeoff: it looks the most polished. But it's the only page with a skeleton, because the dashboard, analysis, competitor detail and ops pages all use `PageLoading`. Also, it shows 4 rows even if the user has 0 or 30 competitors.\n\n**Option B: keep the spinner, but tidy it up.** Pass a label (`<PageLoading label=\"Loading competitors…\" />`) and wrap it in the same bordered box the table uses, so the empty space looks deliberate.\n- Change: one line, maybe three. It uses the `label` prop that `PageLoading` already has and nobody passes yet.\n- Tradeoff: it stays consistent with the other pages and costs almost nothing. There's still a layout jump when the table loads in.\n\nMy pick is B, unless the spinner itself is what's bothering you. In that case A is the real fix.\n\nOne question that changes the answer: what's wrong with the current spinner? It might be the look. Or it might be that you're seeing a blank or flicker somewhere else, like the \"Find competitors\" dialog or a refetch after adding a competitor, which shows no indicator at all. If it's one of those, neither A nor B fixes it.\n\nTwo other notes:\n- The file already has an uncommitted change of yours (the empty-state copy). Whatever I do would go on top of it, and I won't touch it.\n- Option A only makes sense on its own page. If you want skeletons everywhere, that's a shared component and a bigger job.\n\nPick A or B, or tell me what's actually bugging you."
+      },
+      {
+        "role": "user",
+        "text": "pick option A"
+      },
+      {
+        "role": "agent",
+        "text": "Done. While `getCompetitors` loads, the page now shows the real table chrome with 4 pulsing placeholder rows instead of the spinner. Header stays put so the swap to real data doesn’t jump."
+      }
+    ],
+    "steps": [
+      {
+        "t": "Grep",
+        "target": "/home/dev/ripple/frontend"
+      },
+      {
+        "t": "Write",
+        "target": "/home/dev/ripple/frontend/src/app/competitors/page.tsx"
+      },
+      {
+        "t": "Write",
+        "target": "/home/dev/ripple/frontend/src/app/competitors/page.tsx"
+      },
+      {
+        "t": "ReadLints",
+        "target": "frontend/src/app/competitors/page.tsx"
+      }
+    ]
+  },
+  "expect": {
+    "action": "KEEP",
+    "trigger_includes_any": [
+      "skeleton",
+      "placeholder"
+    ],
+    "trigger_excludes": [
+      "option",
+      "pick"
+    ],
+    "no_absolute_paths": true
+  }
+}
