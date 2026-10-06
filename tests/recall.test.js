@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateCoverage, recall, tokenize } from '../lib/recall.js';
+import { calculateCoverage, expandRecallQuery, recall, shouldExpandRecallQuery, tokenize } from '../lib/recall.js';
 
 describe('tokenize', () => {
   it('lowercases, splits on punctuation, and drops stop words', () => {
@@ -30,6 +30,15 @@ describe('calculateCoverage', () => {
 
   it('allows a single high-value word of length >= 6', () => {
     expect(calculateCoverage(tokenize('run postgres locally'), 'postgres')).toBe(1);
+  });
+
+  it('does not require 75% of a long stored trigger', () => {
+    const stored =
+      'add receipt photos to an expense client compresses to under 200kb put to r2 store the object key';
+    const prompt = tokenize(
+      'also compress receipts like the expense flow we already have, 200kb, r2, object key, plus settings copy',
+    );
+    expect(calculateCoverage(prompt, stored)).toBeGreaterThan(0);
   });
 });
 
@@ -89,5 +98,26 @@ describe('recall', () => {
         { id: 'abc', trigger: 'migrate postgres', steps: [{ t: 'Bash', target: 'x' }], enabled: true },
       ]),
     ).toBeNull();
+  });
+});
+
+describe('expandRecallQuery', () => {
+  it('expands thin or anaphoric prompts, not a new task with its own nouns', () => {
+    expect(shouldExpandRecallQuery('do the same for splits')).toBe(true);
+    expect(shouldExpandRecallQuery('pick option A')).toBe(true);
+    expect(shouldExpandRecallQuery('yes')).toBe(true);
+    expect(shouldExpandRecallQuery('unrelated')).toBe(false);
+    expect(shouldExpandRecallQuery('fix login csrf')).toBe(false);
+    expect(shouldExpandRecallQuery('add receipt photos to expenses')).toBe(false);
+  });
+
+  it('joins prior turns onto an anaphoric prompt', () => {
+    const q = expandRecallQuery('do the same for splits', [
+      { role: 'user', text: 'please add receipt upload to expenses' },
+      { role: 'agent', text: 'done' },
+      { role: 'user', text: 'do the same for splits' },
+    ]);
+    expect(q).toContain('add receipt upload');
+    expect(q.startsWith('do the same for splits')).toBe(true);
   });
 });
