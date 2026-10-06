@@ -1,90 +1,79 @@
 # Reflex
 
-Procedural memory for coding agents.
+Your coding agent figures things out. Then it forgets and figures them out again.
 
-Coding agents are pretty good at figuring things out. They're bad at remembering how they did it last time, so they just figure it out again. Every time.
-
-Reflex watches the tools your agent actually runs, keeps the paths that worked, and hands them back the next time you ask for something similar. It doesn't store facts, your docs already do that. It stores how.
+Reflex watches what the agent actually did when something worked, saves that path, and hands it back the next time you ask for something similar. It does not store facts or preferences. Your docs already cover that. It stores **how**.
 
 The npm package is `agent-procedures`. The product is Reflex.
 
-## How it works (hot path vs cold path)
-
-The **hot path** runs every time you prompt the agent or the agent runs a tool. It has to be fast, so it doesn't call an LLM. It's just disk I/O. When you ask for something, Reflex checks its memory for a match and injects the steps into the agent's context. When the agent uses tools, Reflex traces what happens. If the agent gets the job done without leaving broken steps behind, Reflex saves that trace as a new procedure.
-
-The **cold path** is a background groomer. Once 5 new procedures pile up, it kicks off a background process that asks a cheap LLM to review them. It drops the risky ones and adds aliases (like synonyms) to the good ones so they match more easily next time. 
-
-You don't run either of these manually. You just use your agent.
-
-## Status & Harnesses
-
-Early. Reflex plugs into agent platforms through thin harness adapters.
-
-- **Claude Code** — default (`npx agent-procedures init`)
-- **Cursor** — `npx agent-procedures init --harness cursor`
-
 ## Install
 
-Run this in the repo you want Reflex in:
+In the repo where you want memory:
 
 ```bash
 npx agent-procedures init
-# or
+# or, for Cursor:
 npx agent-procedures init --harness cursor
 ```
 
-Installing the package on its own won't do anything. You need `init`. It creates the folders, copies the runtime in, and adds a hook so your agent knows to call it.
+`init` is required. Installing the package alone does nothing. It sets up a small folder in the repo and wires your agent so Reflex runs in the background.
 
-For Cursor, init writes `.cursor/hooks.json` and a shim under `.cursor/hooks/`. The hook command uses the absolute path to the `node` that ran init, because Cursor's hook shell often doesn't see nvm on `PATH`.
+Supported today:
 
-## API key (for the background groomer)
+- **Claude Code** — default
+- **Cursor** — `--harness cursor`
 
-Because the groomer uses an LLM to review procedures, it needs a cheap model key. 
+You can use both in one repo if you want. If Cursor also runs Claude’s hooks and you see double work, turn off third-party Claude hooks in Cursor and keep each tool on its own wiring.
 
-If you already have `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `GEMINI_API_KEY` exported in your terminal, it just uses that. Otherwise:
+## Daily use
+
+There is nothing to run. Keep talking to your agent.
+
+When a task succeeds, Reflex quietly remembers the steps. When you ask for something similar later — including short follow-ups like “do the same for the other page” — it can feed those steps back so the agent does not start from zero.
+
+After a few new memories pile up, a background reviewer cleans them up: drops junk, shortens triggers, adds other ways you might ask. You do not start that yourself.
+
+## See what you got back
 
 ```bash
-npx agent-procedures auth login    # pick a provider, paste your key
-npx agent-procedures auth status   # check what it's using and the last groomer error
+npx agent-procedures ui --open
 ```
 
-The key gets checked before it's saved, so a typo fails right away instead of a week later in a log file. It gets stored in `~/.reflex/credentials.json` on your machine and only you can read it. 
+Opens a local page for **this repo**: how many times Reflex helped this week, which sessions, which memories, and a rough estimate of tokens you did not spend rediscovering the same path. Estimates only — not a bill from the model.
 
-## What ends up in your repo
+## API key (background cleanup only)
 
-```
-.reflex/
-  config.json        # settings, not memory
-  procedures.jsonl   # stable memory (commit this)
-  runs.jsonl         # optional run outcomes
-  runtime.js         # the engine, one bundled file — do not edit
-  pending.jsonl      # ingest buffer (local, gitignored)
-  processing.jsonl   # batch the groomer is reviewing right now (local)
-  groomer.lock       # single-flight guard for the groomer (local)
-  traces/            # scratch for the current turn
+The background reviewer needs a cheap model key. Day-to-day remembering does not.
+
+If `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY` is already in your terminal, Reflex uses that. Otherwise:
+
+```bash
+npx agent-procedures auth login
+npx agent-procedures auth status
 ```
 
-The hot path only appends to `pending.jsonl`. A background groomer renames that buffer to `processing.jsonl`, reviews it, and merges keepers into `procedures.jsonl`. Recall reads all three, so memory works before grooming finishes.
+The key is checked when you save it, stored only on your machine (`~/.reflex/credentials.json`), and readable only by you.
 
-Init ignores everything under `.reflex/` except `config.json`, `package.json`, `procedures.jsonl`, `runs.jsonl`, and `runtime.js`. **Commit those five files**, plus the harness wiring (`.claude/settings.json` for Claude Code, and/or `.cursor/hooks.json` for Cursor), so anyone who clones the repo gets the same memory. If you upgrade the package, run `init` again. That overwrites `runtime.js`.
+## What to commit
 
-You can wire both harnesses in one repo if you use Claude Code and Cursor. Cursor may also load Claude’s hooks via third-party compatibility — if you see double hook runs, turn that off in Cursor settings and keep `.cursor/hooks.json` for Cursor / `.claude/settings.json` for Claude Code.
+After `init`, commit:
+
+- `.reflex/config.json`
+- `.reflex/package.json`
+- `.reflex/procedures.jsonl` — the shared memory
+- `.reflex/runs.jsonl`
+- `.reflex/runtime.js`
+- the hook wiring (`.claude/settings.json` and/or `.cursor/hooks.json`)
+
+Everything else under `.reflex/` stays local (scratch, pending review, hit log). Teammates who clone the repo get the same remembered how-tos.
+
+When you upgrade the package, run `init` again. That refreshes `runtime.js`.
 
 ## Secrets
 
-Reflex sanitizes prompts and tool targets before writing traces. Inline credentials it can identify are promoted to environment requirements, so a stored procedure keeps `npm run migrate` and records that it needs `DATABASE_URL` instead of storing the URL value. Recall tells the agent which variables must already be set.
+Reflex scrubs prompts and commands before saving. Known inline credentials become “needs this env var” instead of storing the value. If it sees a secret it cannot safely rewrite, it skips that turn.
 
-Reflex also checks for common provider credentials using signatures ported from Gitleaks. If it detects a secret that it cannot safely parameterize, it drops that turn instead of writing a procedure or sending it to the groomer.
-
-Secret detection is defense in depth, not a guarantee. Do not put credentials directly in prompts or command lines; use environment variables or a secret manager.
-
-## Adding a harness
-
-If you want to build an adapter for something other than Claude Code:
-
-Only three things change between harnesses: where hooks get registered, what the event payload looks like, and how context gets passed back to the agent. The rest of the engine doesn't care who called it.
-
-Adding one is a single file in `lib/harnesses/` plus one line in `lib/harnesses/index.js`. `claude.js` is the reference.
+Still: put secrets in the environment or a secret manager, not in the chat.
 
 ## License
 
