@@ -58,6 +58,7 @@ describe('init', () => {
     fs.writeFileSync(path.join(DIR, '.reflex', 'worker.log'), '');
     fs.writeFileSync(path.join(DIR, '.reflex', 'pending.jsonl'), '');
     fs.writeFileSync(path.join(DIR, '.reflex', 'processing.jsonl'), '');
+    fs.writeFileSync(path.join(DIR, '.reflex', 'hits.jsonl'), '');
     const ignored = (file) =>
       execSync(`git check-ignore -q "${file}" && echo yes || echo no`, { cwd: DIR, shell: '/bin/sh' })
         .toString().trim() === 'yes';
@@ -69,6 +70,7 @@ describe('init', () => {
     expect(ignored('.reflex/worker.log')).toBe(true);
     expect(ignored('.reflex/pending.jsonl')).toBe(true);
     expect(ignored('.reflex/processing.jsonl')).toBe(true);
+    expect(ignored('.reflex/hits.jsonl')).toBe(true);
   });
 
   it('installs one runtime file and a thin shim, and drops a leftover engine dir', () => {

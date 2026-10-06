@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reflex</title>
+    <style>
+      :root {
+        --bg: #111111;
+        --fg: #e8e8e8;
+        --muted: #8a8a8a;
+        --line: #2a2a2a;
+        --panel: #181818;
+        --hit: #c8c8c8;
+      }
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 28px 20px 64px; }
+      header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 28px; }
+      .brand { font-size: 13px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; }
+      .repo { font-size: 18px; font-weight: 600; }
+      .range { font-size: 13px; color: var(--muted); }
+      .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); margin-bottom: 32px; }
+      .stat { background: var(--panel); padding: 16px 18px; }
+      .stat .n { font-size: 28px; font-weight: 600; letter-spacing: -0.03em; }
+      .stat .l { margin-top: 4px; font-size: 12px; color: var(--muted); }
+      h2 { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 10px; }
+      .feed { border-top: 1px solid var(--line); }
+      .row { border-bottom: 1px solid var(--line); }
+      .row > button {
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: 0;
+        color: inherit;
+        font: inherit;
+        padding: 12px 0;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: 108px 1fr 88px;
+        gap: 12px;
+        align-items: baseline;
+      }
+      .row > button:hover { color: #fff; }
+      .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+      .who { min-width: 0; }
+      .trigger { font-weight: 500; }
+      .meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+      .saved { text-align: right; font-variant-numeric: tabular-nums; color: var(--hit); font-size: 13px; }
+      .detail {
+        display: none;
+        padding: 0 0 14px 120px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .row.open .detail { display: block; }
+      .detail ol { margin: 0; padding-left: 18px; }
+      .detail li { margin: 4px 0; }
+      .empty { color: var(--muted); padding: 24px 0; }
+      footer { margin-top: 28px; font-size: 12px; color: var(--muted); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div>
+          <div class="brand">Reflex</div>
+          <div class="repo" id="repo"></div>
+        </div>
+        <div class="range" id="range"></div>
+      </header>
+      <div class="stats">
+        <div class="stat">
+          <div class="n" id="hit-n">0</div>
+          <div class="l">Hits</div>
+        </div>
+        <div class="stat">
+          <div class="n" id="saved-n">≈ 0</div>
+          <div class="l">Tokens saved</div>
+        </div>
+      </div>
+      <h2>Hits</h2>
+      <div class="feed" id="feed"></div>
+      <footer>Estimate from each procedure’s first cold run, minus the injected recipe. Not a model invoice.</footer>
+    </div>
+    <script>
+      const data = __DATA__;
+      document.title = "Reflex · " + data.repo;
+      document.getElementById("repo").textContent = data.repo;
+      document.getElementById("range").textContent = data.range;
+      document.getElementById("hit-n").textContent = String(data.hitCount);
+      document.getElementById("saved-n").textContent = "≈ " + data.savedLabel;
+      const feed = document.getElementById("feed");
+      if (!data.hits.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No hits this week. Use the agent as usual.";
+        feed.appendChild(empty);
+      }
+      data.hits.forEach((h) => {
+        const row = document.createElement("div");
+        row.className = "row";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        const time = document.createElement("span");
+        time.className = "time";
+        time.textContent = h.time;
+        const who = document.createElement("span");
+        who.className = "who";
+        const trigger = document.createElement("div");
+        trigger.className = "trigger";
+        trigger.textContent = h.trigger;
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.textContent = "session " + h.session;
+        who.append(trigger, meta);
+        const saved = document.createElement("span");
+        saved.className = "saved";
+        saved.textContent = "≈ " + h.saved;
+        btn.append(time, who, saved);
+        const detail = document.createElement("div");
+        detail.className = "detail";
+        const ol = document.createElement("ol");
+        (h.steps || []).forEach((s) => {
+          const li = document.createElement("li");
+          li.textContent = s;
+          ol.appendChild(li);
+        });
+        detail.appendChild(ol);
+        btn.addEventListener("click", () => row.classList.toggle("open"));
+        row.append(btn, detail);
+        feed.appendChild(row);
+      });
+    </script>
+  </body>
+</html>
